@@ -1,8 +1,111 @@
 generator client {
-  provider = "prisma-client"
-  output   = "../generated/prisma"
+  provider = "prisma-client-js"
 }
 
 datasource db {
   provider = "postgresql"
+}
+
+enum CategoryType {
+  EXPENSE
+  INCOME
+}
+
+enum TransactionType {
+  EXPENSE
+  INCOME
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  accounts     Account[]
+  categories   Category[]
+  transactions Transaction[]
+  transfers    Transfer[]
+}
+
+model Icon {
+  id         String     @id @default(cuid())
+  key        String     @unique
+  label      String
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+  accounts   Account[]
+  categories Category[]
+}
+
+model Account {
+  id           String        @id @default(cuid())
+  userId       String
+  iconId       String?
+  name         String
+  balance      Decimal       @db.Decimal(18, 2)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  icon         Icon?         @relation(fields: [iconId], references: [id])
+  transactions Transaction[]
+  fromTransfer Transfer[]    @relation("TransferFromAccount")
+  toTransfer   Transfer[]    @relation("TransferToAccount")
+
+  @@index([userId])
+}
+
+model Category {
+  id           String        @id @default(cuid())
+  userId       String
+  iconId       String?
+  name         String
+  type         CategoryType
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  deletedAt    DateTime?
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  icon         Icon?         @relation(fields: [iconId], references: [id])
+  transactions Transaction[]
+
+  @@index([userId, type])
+}
+
+model Transaction {
+  id          String          @id @default(cuid())
+  userId      String
+  accountId   String
+  categoryId  String
+  type        TransactionType
+  amount      Decimal         @db.Decimal(18, 2)
+  occurredAt  DateTime
+  comment     String?
+  receiptUrl  String?
+  createdAt   DateTime        @default(now())
+  updatedAt   DateTime        @updatedAt
+  deletedAt   DateTime?
+  user        User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account     Account         @relation(fields: [accountId], references: [id], onDelete: Restrict)
+  category    Category        @relation(fields: [categoryId], references: [id], onDelete: Restrict)
+
+  @@index([userId, type, occurredAt])
+}
+
+model Transfer {
+  id            String    @id @default(cuid())
+  userId        String
+  fromAccountId String
+  toAccountId   String
+  amount        Decimal   @db.Decimal(18, 2)
+  occurredAt    DateTime
+  comment       String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  deletedAt     DateTime?
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  fromAccount   Account   @relation("TransferFromAccount", fields: [fromAccountId], references: [id], onDelete: Restrict)
+  toAccount     Account   @relation("TransferToAccount", fields: [toAccountId], references: [id], onDelete: Restrict)
+
+  @@index([userId, occurredAt])
 }
