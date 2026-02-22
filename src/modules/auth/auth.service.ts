@@ -1,9 +1,6 @@
-import {
-  ConflictException,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
+import { Prisma } from '@prisma/client';
 import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../../prisma/prisma.service';
 
@@ -20,9 +17,30 @@ export class AuthService {
       throw new ConflictException('EMAIL_ALREADY_EXISTS');
     }
     const passwordHash = await bcrypt.hash(password, 10);
-    const user = await this.prisma.user.create({
-      data: { email, passwordHash },
-      select: { id: true, email: true },
+    const user = await this.prisma.$transaction(async (tx) => {
+      const created = await tx.user.create({
+        data: { email, passwordHash },
+        select: { id: true, email: true },
+      });
+
+      await tx.account.create({
+        data: {
+          userId: created.id,
+          name: 'main account',
+          balance: new Prisma.Decimal(0),
+        },
+      });
+
+      await tx.category.createMany({
+        data: [
+          { userId: created.id, name: 'gasoline', type: 'EXPENSE' },
+          { userId: created.id, name: 'food', type: 'EXPENSE' },
+          { userId: created.id, name: 'house services', type: 'EXPENSE' },
+          { userId: created.id, name: 'salary', type: 'INCOME' },
+        ],
+      });
+
+      return created;
     });
     const token = await this.jwtService.signAsync({ sub: user.id, email: user.email });
     return { user, token };
